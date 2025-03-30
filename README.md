@@ -18,3 +18,24 @@
 10. Если нужно, создайте новые каналы: тот же "+" и опция "Create new channel".
 11. Выберите, в каких каналах будет работать этот бот и впишите их названия в **файл dev.env -> MM_CHANNEL="test_channel,mychan"** (например "test_channel,mychan").
 12. Добавьте бота в выбранные каналы: нажмите три точки рядом с названием канала и выберите add members, введите имя бота (например "@vote-bot").
+13. Запустите команду **"make bot_db"** - развернутся контейнеры с самим ботом и базой данных tarantool. После запуска контейнеров в выбранных Вами чатах появится приветственное сообщение от бота. Все готово, можно им пользоваться.
+14. Для вывода списка команд бота введите в чат канала **"@vote-bot help"**, вы должны увидеть:
+```
+for use bot enter folowing commands with format:
+
+create voting - use minimum 3 lines:
+  1.     @vote-bot new optional_exp_date(hh:mm:ss-dd:mm:yyyy)
+  2.     voting name
+  3.     option1 name
+  n.     in next lines option2 name, option3 name, ...
+vote:
+  @vote-bot vote vote_id(number) var(number)
+show voting with id:
+  @vote-bot show vote_id(number)
+show all:
+  @vote-bot show_all
+voting owner can close it:
+  @vote-bot close vote_id(number)
+voting owner can delete it:
+  @vote-bot close vote_id(number)
+```
