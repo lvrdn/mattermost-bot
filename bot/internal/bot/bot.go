@@ -46,7 +46,7 @@ func NewBot(ctx context.Context, cfg *config.Config) *bot {
 	bot.router = router.NewRouter(cfg.MMBotname, storage)
 
 	// create a new mattermost client
-	bot.mattermostClient = model.NewAPIv4Client(bot.config.MMServer.String())
+	bot.mattermostClient = model.NewAPIv4Client("http://mm_server:8065")
 
 	// login
 	bot.mattermostClient.SetToken(cfg.MMToken)
@@ -96,7 +96,7 @@ func (b *bot) ListenToEvents(ctx context.Context) {
 
 	var err error
 
-	url := fmt.Sprintf("ws://%s", b.config.MMServer.Host+b.config.MMServer.Path)
+	url := fmt.Sprintf("ws://%s", "mm_server:8065")
 	b.mattermostWebSocketClient, err = model.NewWebSocketClient4(
 		url,
 		b.config.MMToken,
