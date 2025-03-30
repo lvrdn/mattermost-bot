@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"mmbot/internal/config"
 	"mmbot/internal/router"
 	"mmbot/internal/storage/tarantool"
@@ -41,7 +40,6 @@ func NewBot(ctx context.Context, cfg *config.Config) *bot {
 	bot.wg.Add(1)
 	storage, err := tarantool.NewStorage(ctx, bot.wg, cfg)
 	if err != nil {
-		log.Println("error with new storage:", err.Error())
 		logger.Fatal("connection to storage failed", methodPointer, "text error", err.Error())
 	}
 
@@ -54,7 +52,6 @@ func NewBot(ctx context.Context, cfg *config.Config) *bot {
 	bot.mattermostClient.SetToken(cfg.MMToken)
 
 	if user, resp, err := bot.mattermostClient.GetUser("me", ""); err != nil {
-		log.Println("error with get client:", err.Error())
 		logger.Fatal("get user failed", methodPointer, "text error", err.Error())
 	} else {
 		logger.Info("get user successfully", methodPointer, "resp", resp)
@@ -64,7 +61,6 @@ func NewBot(ctx context.Context, cfg *config.Config) *bot {
 	// find and save the bot's team to app struct
 	if team, resp, err := bot.mattermostClient.GetTeamByName(cfg.MMTeam, ""); err != nil {
 		logger.Fatal("get team failed", methodPointer, "text error", err.Error())
-		log.Println("error with get team:", err.Error())
 	} else {
 		logger.Info("get team successfully", methodPointer, "resp", resp)
 		bot.mattermostTeam = team
@@ -85,7 +81,6 @@ func NewBot(ctx context.Context, cfg *config.Config) *bot {
 
 	if bot.mattermostChannels == nil {
 		logger.Fatal("no channels received", methodPointer)
-		log.Println("no channel received")
 	}
 
 	for _, channel := range bot.mattermostChannels {
@@ -107,7 +102,6 @@ func (b *bot) ListenToEvents(ctx context.Context) {
 		b.config.MMToken,
 	)
 	if err != nil {
-		log.Println("mm websocker disconnected:", err.Error())
 		logger.Fatal("mattermost websocket disconnected, stopped", methodPointer)
 	}
 
