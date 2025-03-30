@@ -1,9 +1,45 @@
-version: "3.9"
+#version: '3.9'
+
+networks:
+  mm_network:
+    driver: bridge
+
 services:
-  test_mm:
+  mm_server:
     image: mattermost/mattermost-preview
-    container_name: test_mm
-    ports: 
-    - "8065:8065"
+    container_name: mm_server
+    ports:
+      - "8065:8065"
     environment:
       MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+    networks:
+      - mm_network
+  
+  bot:
+    profiles: ["disabled"]
+    container_name: mm_bot
+    build:
+      dockerfile: ./bot/Dockerfile
+    image: bot
+    env_file:
+      - ./dev.env
+    networks:
+      - mm_network
+    links:
+      - dbTarantool:dbTarantool
+    depends_on:
+      - "dbTarantool"
+    command: ["/bot/wait-for-it.sh","dbTarantool:3301","--","/bot/bot"]
+
+  dbTarantool:
+    profiles: ["disabled"]
+    container_name: dbTarantool
+    image: tarantool/tarantool:latest
+    restart: always
+    env_file:
+      - ./dev.env
+    networks:
+      - mm_network
+    volumes:
+      - ./bot/internal/storage/tarantool/init/init.lua:/opt/tarantool/init.lua
+    command: tarantool /opt/tarantool/init.lua
