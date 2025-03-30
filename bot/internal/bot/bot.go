@@ -1,16 +1,18 @@
 package bot
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"mmbot/internal/config"
 	"mmbot/internal/router"
-	"mmbot/internal/storage/memory"
+	"mmbot/internal/storage/tarantool"
 	"mmbot/pkg/logger"
 	"os"
 	"os/signal"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/mattermost/mattermost-server/v6/model"
 )
@@ -23,41 +25,52 @@ type bot struct {
 	mattermostUser            *model.User
 	mattermostChannels        []*model.Channel
 	mattermostTeam            *model.Team
+	wg                        *sync.WaitGroup
+	channelsID                sync.Map
 }
 
-func NewBot(cfg *config.Config) *bot {
+func NewBot(ctx context.Context, cfg *config.Config) *bot {
 
 	const methodPointer string = "bot.NewBot"
 
-	storage := memory.NewStorage(cfg)
-
 	bot := &bot{
 		config: cfg,
-		router: router.NewRouter(cfg.MMBotname, storage),
+		wg:     &sync.WaitGroup{},
 	}
 
-	// Create a new mattermost client.
+	bot.wg.Add(1)
+	storage, err := tarantool.NewStorage(ctx, bot.wg, cfg)
+	if err != nil {
+		log.Println("error with new storage:", err.Error())
+		logger.Fatal("connection to storage failed", methodPointer, "text error", err.Error())
+	}
+
+	bot.router = router.NewRouter(cfg.MMBotname, storage)
+
+	// create a new mattermost client
 	bot.mattermostClient = model.NewAPIv4Client(bot.config.MMServer.String())
 
-	// Login.
+	// login
 	bot.mattermostClient.SetToken(cfg.MMToken)
 
 	if user, resp, err := bot.mattermostClient.GetUser("me", ""); err != nil {
+		log.Println("error with get client:", err.Error())
 		logger.Fatal("get user failed", methodPointer, "text error", err.Error())
 	} else {
 		logger.Info("get user successfully", methodPointer, "resp", resp)
 		bot.mattermostUser = user
 	}
 
-	// Find and save the bot's team to app struct.
+	// find and save the bot's team to app struct
 	if team, resp, err := bot.mattermostClient.GetTeamByName(cfg.MMTeam, ""); err != nil {
 		logger.Fatal("get team failed", methodPointer, "text error", err.Error())
+		log.Println("error with get team:", err.Error())
 	} else {
 		logger.Info("get team successfully", methodPointer, "resp", resp)
 		bot.mattermostTeam = team
 	}
 
-	// Find and save the talking channel to app struct.
+	// find and save the talking channel to app struct
 	for _, channelName := range cfg.MMChannels {
 		if channel, resp, err := bot.mattermostClient.GetChannelByName(
 			channelName, bot.mattermostTeam.Id, "",
@@ -66,11 +79,13 @@ func NewBot(cfg *config.Config) *bot {
 		} else {
 			logger.Info("get channel successfully", methodPointer, "channel name", channelName, "resp", resp)
 			bot.mattermostChannels = append(bot.mattermostChannels, channel)
+			bot.channelsID.Store(channel.Id, struct{}{})
 		}
 	}
 
 	if bot.mattermostChannels == nil {
 		logger.Fatal("no channels received", methodPointer)
+		log.Println("no channel received")
 	}
 
 	for _, channel := range bot.mattermostChannels {
@@ -80,63 +95,64 @@ func NewBot(cfg *config.Config) *bot {
 	return bot
 }
 
-func (b *bot) ListenToEvents() {
+func (b *bot) ListenToEvents(ctx context.Context) {
 
 	const methodPointer string = "bot.ListenToEvents"
 
 	var err error
-	tryNum := 1
-	for {
-		url := fmt.Sprintf("ws://%s", b.config.MMServer.Host+b.config.MMServer.Path)
-		b.mattermostWebSocketClient, err = model.NewWebSocketClient4(
-			url,
-			b.config.MMToken,
-		)
-		if err != nil {
-			logger.Warn("mattermost websocket disconnected, retrying", methodPointer, "tryNum", tryNum, "text error", err.Error())
-			tryNum += 1
 
-			if tryNum >= 5 {
-				logger.Fatal("mattermost websocket disconnected, stopped", methodPointer)
-			}
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-		logger.Info("Mattermost websocket connected", methodPointer)
-
-		b.mattermostWebSocketClient.Listen()
-
-		for event := range b.mattermostWebSocketClient.EventChannel {
-			go b.handleWebSocketEvent(event)
-		}
-
+	url := fmt.Sprintf("ws://%s", b.config.MMServer.Host+b.config.MMServer.Path)
+	b.mattermostWebSocketClient, err = model.NewWebSocketClient4(
+		url,
+		b.config.MMToken,
+	)
+	if err != nil {
+		log.Println("mm websocker disconnected:", err.Error())
+		logger.Fatal("mattermost websocket disconnected, stopped", methodPointer)
 	}
 
-	// for _, channel := range b.MattermostChannels {
-	// 	sendMsg(byeMsg, channel, b.MattermostClient)
-	// }
+	logger.Info("mattermost websocket connected", methodPointer)
+
+	b.mattermostWebSocketClient.Listen()
+
+	for event := range b.mattermostWebSocketClient.EventChannel {
+		b.wg.Add(1)
+		go b.handleWebSocketEvent(event)
+	}
 
 }
 
-func (b *bot) SetupGracefulShutdown() {
+func (b *bot) GracefulShutdown() {
 
-	const methodPointer string = "bot.SetupGracefulShutdown"
+	const methodPointer string = "bot.GracefulShutdown"
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
-	go func() {
-		for range c {
-			if b.mattermostWebSocketClient != nil {
-				logger.Info("Closing websocket connection", methodPointer)
-				b.mattermostWebSocketClient.Close()
-			}
-			logger.Info("Shutting down", methodPointer)
-			os.Exit(0)
-		}
-	}()
+
+	<-c
+
+	for _, channel := range b.mattermostChannels {
+		sendMsg(byeMsg, channel.Id, b.mattermostClient)
+	}
+
+	if b.mattermostWebSocketClient != nil {
+		logger.Info("closing websocket connection", methodPointer)
+		b.mattermostWebSocketClient.Close()
+	}
+
+}
+
+func (b *bot) WaitСlosingProcesses() {
+
+	const methodPointer string = "bot.Wait"
+
+	defer logger.Info("Shutting down", methodPointer)
+	b.wg.Wait()
 }
 
 func (b *bot) handleWebSocketEvent(event *model.WebSocketEvent) {
+
+	defer b.wg.Done()
 
 	const methodPointer string = "bot.handleWebSocketEvent"
 
@@ -145,15 +161,8 @@ func (b *bot) handleWebSocketEvent(event *model.WebSocketEvent) {
 		return
 	}
 
-	// Ignore other channels.
-	ok := false
-	for _, channel := range b.mattermostChannels { //data race!
-		if event.GetBroadcast().ChannelId == channel.Id {
-			ok = true
-			break
-		}
-	}
-	if !ok {
+	// Ignore other channels
+	if _, ok := b.channelsID.Load(event.GetBroadcast().ChannelId); !ok {
 		return
 	}
 

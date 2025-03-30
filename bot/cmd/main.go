@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"mmbot/internal/bot"
 	"mmbot/internal/config"
@@ -21,10 +22,14 @@ func main() {
 		logger.Fatal("get config failed", methodPointer, "text error", err.Error())
 	}
 
-	bot := bot.NewBot(cfg)
+	ctx, finish := context.WithCancel(context.Background())
 
-	bot.SetupGracefulShutdown()
+	bot := bot.NewBot(ctx, cfg)
 
-	bot.ListenToEvents()
+	go bot.ListenToEvents(ctx)
+
+	bot.GracefulShutdown()
+	finish()
+	bot.WaitСlosingProcesses()
 
 }
