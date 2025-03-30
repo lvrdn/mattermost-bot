@@ -1,8 +1,9 @@
 mattermost:
-	curl -O https://raw.githubusercontent.com/mattermost/docker/master/docker-compose.yml
-
-run:
 	docker-compose up -d
+
+bot_db:
+	docker-compose --profile disabled up -d
+
 
 .PHONY: bot
 bot:
@@ -11,3 +12,5 @@ bot:
 	cd ./bot; \
 	go build -o ./bin/bot.exe ./cmd/main.go; \
 	./bin/bot.exe
+
+
