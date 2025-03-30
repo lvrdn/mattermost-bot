@@ -12,4 +12,9 @@
 6. Пропускайте/подтверждайте следующие настройки и после того как попадете на главную страницу, переходите по http://localhost:8065/admin_console/integrations/bot_accounts
   значение **Enable Bot Account Creation:** укажите **True**, сохраните.
 7. Далее переходите по http://localhost:8065/myteam/integrations/bots и создайте нового бота:
-   **username** и **display name** укажите имя бота и запишите его в **файл dev.env -> MM_TEAM="myteam"** (например "vote-bot").
+   **username** и **display name** укажите имя бота и запишите его в **файл dev.env -> MM_BOTNAME="vote-bot"** (например "vote-bot"). Поставьте **enabled** у **post:channel**.
+8. Сгенерируется токен бота, который необходимо скопировать и вставить в **файл dev.env -> MM_TOKEN="YOUR_TOKEN"** (например "x3613cm7efyetksednieqpncpo").
+9. Добавьте бота в вашу team: нажмите "+" рядом с названием team, выберите invite people и введите имя бота (например "@vote-bot").
+10. Если нужно, создайте новые каналы: тот же "+" и опция "Create new channel".
+11. Выберите, в каких каналах будет работать этот бот и впишите их названия в **файл dev.env -> MM_CHANNEL="test_channel,mychan"** (например "test_channel,mychan").
+12. Добавьте бота в выбранные каналы: нажмите три точки рядом с названием канала и выберите add members, введите имя бота (например "@vote-bot").
