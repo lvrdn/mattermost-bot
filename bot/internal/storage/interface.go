@@ -10,7 +10,7 @@ type Storage interface {
 	Close(channelID string, votingID int, userID string) error
 	Delete(channelID string, votingID int, userID string) error
 	GetErrBadVotingID() error
-	GetErrBadChannelID() error
+	GetErrNoVotings() error
 	GetErrBadOptionID() error
 	GetErrClosedVoting() error
 	GetErrNoAccess() error

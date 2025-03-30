@@ -12,7 +12,7 @@ type Voting struct {
 	Owner       string
 	OwnerID     string
 	ExpDate     *time.Time
-	CreatedAt   time.Time
+	CreatedAt   *time.Time
 	Closed      bool
 }
 
