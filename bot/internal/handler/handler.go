@@ -19,7 +19,7 @@ const (
 	helpResponse string = `
 for use bot enter folowing commands with format:
 - create voting - use minimum 3 lines: 
-		1. 	@%s new optional_exp_date(ss:mm:hh-dd:mm:yyyy)
+		1. 	@%s new optional_exp_date(hh:mm:ss-dd:mm:yyyy)
 		2. 	voting name
 		3. 	option1 name
 		n. 	in next lines option2 name, option3 name, ...
@@ -62,10 +62,11 @@ func (h *handler) New(channelID, name, userID, username, expDate string, options
 	if expDate != "" {
 		var err error
 		date = new(time.Time)
-		*date, err = time.Parse(timeLayout, expDate)
+		*date, err = time.ParseInLocation(timeLayout, expDate, time.Now().Location())
 		if err != nil {
 			return "enter time in next format [ss:mm:hh-dd:mm:yyyy]"
 		}
+
 	}
 
 	votingID, err := h.storage.Create(channelID, name, userID, username, date, options)
@@ -85,10 +86,6 @@ func (h *handler) Vote(channelID, userID string, votingID, optionID int) string 
 
 	err := h.storage.AddVoice(channelID, userID, votingID, optionID)
 	switch err {
-	case h.storage.GetErrBadChannelID():
-		logger.Error("vote failed - bad channel id", methodPointer, "text error", err.Error(), "channel id", channelID)
-		return somethingWrong
-
 	case h.storage.GetErrBadVotingID():
 		response := fmt.Sprintf("no voting with this id [%d]", votingID)
 		logger.Info("vote failed - bad voting id", methodPointer, "text error", err.Error(), "response", response)
@@ -123,10 +120,6 @@ func (h *handler) Show(channelID string, votingID int) string {
 
 	voting, err := h.storage.Get(channelID, votingID) //todo
 	switch err {
-	case h.storage.GetErrBadChannelID():
-		logger.Error("get voting failed - bad channel id", methodPointer, "text error", err.Error(), "channel id", channelID)
-		return somethingWrong
-
 	case h.storage.GetErrBadVotingID():
 		response := fmt.Sprintf("no voting with this id [%d]", votingID)
 		logger.Info("get voting failed - bad voting id", methodPointer, "text error", err.Error(), "response", response)
@@ -151,9 +144,10 @@ func (h *handler) ShowAll(channelID string) string {
 
 	votings, err := h.storage.GetAll(channelID)
 	switch err {
-	case h.storage.GetErrBadChannelID():
-		logger.Error("get all votings failed - bad channel id", methodPointer, "text error", err.Error(), "channel id", channelID)
-		return somethingWrong
+	case h.storage.GetErrNoVotings():
+		response := "no votings in this channel now"
+		logger.Info("get all votings failed - no votings with this channel id", methodPointer, "response", response)
+		return response
 
 	default:
 		if err != nil {
@@ -183,10 +177,6 @@ func (h *handler) Close(channelID string, votingID int, userID string) string {
 
 	err := h.storage.Close(channelID, votingID, userID) //todo
 	switch err {
-	case h.storage.GetErrBadChannelID():
-		logger.Error("close voting failed - bad channel id", methodPointer, "text error", err.Error(), "channel id", channelID)
-		return somethingWrong
-
 	case h.storage.GetErrBadVotingID():
 		response := fmt.Sprintf("no voting with this id [%d]", votingID)
 		logger.Info("close voting failed - bad voting id", methodPointer, "text error", err.Error(), "response", response)
@@ -219,12 +209,8 @@ func (h *handler) Delete(channelID string, votingID int, userID string) string {
 
 	const methodPointer string = "handler.Delete"
 
-	err := h.storage.Delete(channelID, votingID, userID) //todo
+	err := h.storage.Delete(channelID, votingID, userID)
 	switch err {
-	case h.storage.GetErrBadChannelID():
-		logger.Error("delete voting failed - bad channel id", methodPointer, "text error", err.Error(), "channel id", channelID)
-		return somethingWrong
-
 	case h.storage.GetErrBadVotingID():
 		response := fmt.Sprintf("no voting with this id [%d]", votingID)
 		logger.Info("delete voting failed - bad voting id", methodPointer, "text error", err.Error(), "response", response)
